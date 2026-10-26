@@ -83,4 +83,17 @@ export class OwnerService {
       .get<Owner[]>(url)
       .pipe(catchError(this.handlerError('searchOwners', [])));
   }
+
+  // SPEC-002 secao 2.1: busca por telefone usa so o parametro telefone (nunca junto com lastName)
+  searchOwnersByTelephone(telephone: string): Observable<Owner[]> {
+    const url = this.entityUrl + '?telefone=' + telephone;
+    return this.http
+      .get<Owner[]>(url)
+      .pipe(catchError(this.handlerError('searchOwnersByTelephone', [])));
+  }
+
+  // nome usado por parte dos testes do plano; mesma busca por telefone
+  searchOwnersByPhone(telephone: string): Observable<Owner[]> {
+    return this.searchOwnersByTelephone(telephone);
+  }
 }
