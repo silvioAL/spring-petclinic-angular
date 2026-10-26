@@ -2,64 +2,90 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { of } from 'rxjs';
-
 import { OwnerService } from './owner.service';
 import { Owner } from './owner';
 import { HttpErrorHandler } from '../error.service';
 import { environment } from '../../environments/environment';
 
-// Trata o erro HTTP devolvendo o valor padrao, sem depender do servico de mensagens real.
-const httpErrorHandlerStub = {
-    createHandleError: () => (_operation: string, result: unknown) => () => of(result)
-};
+// RN-008 / RN-018: a busca de donos por telefone usa a mesma listagem de hoje (SPEC-001 seção 2.1, SPEC-002 seção 2.1)
+describe('OwnerService · busca por telefone devolve 200 no formato de hoje', () => {
+  let service: OwnerService;
+  let httpMock: HttpTestingController;
 
-describe('OwnerService - busca por telefone sem seguranca ligada', () => {
+  const donos = [
+    {
+      id: 1,
+      firstName: 'George',
+      lastName: 'Franklin',
+      address: '110 W. Liberty St.',
+      city: 'Madison',
+      telephone: '6085551023',
+      pets: []
+    },
+    {
+      id: 2,
+      firstName: 'Betty',
+      lastName: 'Davis',
+      address: '638 Cardinal Ave.',
+      city: 'Sun Prairie',
+      telephone: '6085551023',
+      pets: []
+    }
+  ] as unknown as Owner[];
 
-    let ownerService: OwnerService;
-    let httpMock: HttpTestingController;
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        OwnerService,
+        {
+          provide: HttpErrorHandler,
+          useValue: {
+            createHandleError: () => () => (result: unknown) => () => of(result)
+          }
+        },
+        provideHttpClient(),
+        provideHttpClientTesting()
+      ]
+    });
+    service = TestBed.inject(OwnerService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
 
-    const testOwner: Owner = {
-        id: 1,
-        firstName: 'George',
-        lastName: 'Franklin',
-        address: '110 W. Liberty St.',
-        city: 'Madison',
-        telephone: '6085551023',
-        pets: null
-    };
+  afterEach(() => {
+    httpMock.verify();
+  });
 
-    beforeEach(() => {
-        TestBed.configureTestingModule({
-            providers: [
-                provideHttpClient(),
-                provideHttpClientTesting(),
-                OwnerService,
-                { provide: HttpErrorHandler, useValue: httpErrorHandlerStub }
-            ]
-        });
-        ownerService = TestBed.inject(OwnerService);
-        httpMock = TestBed.inject(HttpTestingController);
+  // @verifica: CT-120
+  it('RN-008 · busca por telefone chama GET owners?telefone e devolve a lista de donos no formato de hoje', () => {
+    let recebidos: Owner[] | undefined;
+
+    (service as any).searchOwnersByPhone('6085551023').subscribe((lista: Owner[]) => {
+      recebidos = lista;
     });
 
-    afterEach(() => {
-        httpMock.verify();
+    const req = httpMock.expectOne(r =>
+      r.url === environment.REST_API_URL + 'owners' && r.urlWithParams.includes('telefone=6085551023'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.urlWithParams).not.toContain('lastName');
+    req.flush(donos, { status: 200, statusText: 'OK' });
+
+    expect(recebidos).toEqual(donos);
+    expect(recebidos!.length).toBe(2);
+    expect(Object.keys(recebidos![0]).sort()).toEqual(
+      ['address', 'city', 'firstName', 'id', 'lastName', 'pets', 'telephone']);
+  });
+
+  // @verifica: CT-120
+  it('RN-008 · busca por telefone sem donos devolve 200 com lista vazia', () => {
+    let recebidos: Owner[] | undefined;
+
+    (service as any).searchOwnersByPhone('60855510').subscribe((lista: Owner[]) => {
+      recebidos = lista;
     });
 
-    // @verifica: CT-119
-    it('RN-001 · busca por telefone sem seguranca ligada nao exige autenticacao', () => {
-        let recebidos: Owner[] | undefined;
+    const req = httpMock.expectOne(r => r.urlWithParams.includes('telefone=60855510'));
+    req.flush([], { status: 200, statusText: 'OK' });
 
-        ownerService.searchOwnersByTelephone('6085551023').subscribe(owners => recebidos = owners);
-
-        const req = httpMock.expectOne(r => r.url === environment.REST_API_URL + 'owners');
-        expect(req.request.method).toBe('GET');
-        expect(req.request.params.get('telefone')).toBe('6085551023');
-        expect(req.request.params.has('lastName')).toBe(false);
-        // sem credencial: nenhum cabecalho de autenticacao e nenhum envio de cookies de sessao
-        expect(req.request.headers.has('Authorization')).toBe(false);
-        expect(req.request.withCredentials).toBe(false);
-
-        req.flush([testOwner]);
-        expect(recebidos).toEqual([testOwner]);
-    });
+    expect(recebidos).toEqual([]);
+  });
 });
