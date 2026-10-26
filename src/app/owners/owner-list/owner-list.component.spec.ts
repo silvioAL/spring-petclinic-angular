@@ -134,4 +134,24 @@ describe('OwnerListComponent', () => {
         expect(el.textContent).toBe((testOwner.firstName.toString() + ' ' + testOwner.lastName.toString()));
     });
 
+    // @verifica: CT-122
+    it('RN-018 · listagem sem telefone é a de hoje (getOwners) e aparece ordenada pelo identificador', async () => {
+        const desordenados: Owner[] = [
+            { ...testOwner, id: 3, firstName: 'Betty', lastName: 'Davis', pets: null },
+            { ...testOwner, id: 1, firstName: 'George', lastName: 'Franklin', pets: null },
+            { ...testOwner, id: 2, firstName: 'Eduardo', lastName: 'Rodriquez', pets: null }
+        ];
+        vi.mocked(spy).mockReturnValue(of(desordenados));
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(vi.mocked(spy).mock.calls.length > 0, 'getOwners called').toBe(true);
+        const nomes = fixture.debugElement
+            .queryAll(By.css('.ownerFullName'))
+            .map(item => (item.nativeElement as HTMLElement).textContent);
+        expect(nomes).toEqual(['George Franklin', 'Eduardo Rodriquez', 'Betty Davis']);
+    });
+
 });
