@@ -48,6 +48,10 @@ class OwnerServiceStub {
     getOwners(): Observable<Owner[]> {
         return of();
     }
+
+    searchOwnersByTelephone(telephone: string): Observable<Owner[]> {
+        return of();
+    }
 }
 
 describe('OwnerListComponent', () => {
@@ -132,6 +136,51 @@ describe('OwnerListComponent', () => {
         de = fixture.debugElement.query(By.css('.ownerFullName'));
         el = de.nativeElement;
         expect(el.textContent).toBe((testOwner.firstName.toString() + ' ' + testOwner.lastName.toString()));
+    });
+
+    // @verifica: CT-122
+    it('RN-018 · listagem sem telefone é a de hoje (getOwners) e aparece ordenada pelo identificador', async () => {
+        const desordenados: Owner[] = [
+            { ...testOwner, id: 3, firstName: 'Betty', lastName: 'Davis', pets: null },
+            { ...testOwner, id: 1, firstName: 'George', lastName: 'Franklin', pets: null },
+            { ...testOwner, id: 2, firstName: 'Eduardo', lastName: 'Rodriquez', pets: null }
+        ];
+        vi.mocked(spy).mockReturnValue(of(desordenados));
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(vi.mocked(spy).mock.calls.length > 0, 'getOwners called').toBe(true);
+        const nomes = fixture.debugElement
+            .queryAll(By.css('.ownerFullName'))
+            .map(item => (item.nativeElement as HTMLElement).textContent);
+        expect(nomes).toEqual(['George Franklin', 'Eduardo Rodriquez', 'Betty Davis']);
+    });
+
+    // @verifica: CT-123
+    it('RN-018 · busca por telefone com vários donos mantém a ordem pelo identificador e mostra o total devolvido', async () => {
+        const doServidor: Owner[] = [
+            { ...testOwner, id: 3, firstName: 'Betty', lastName: 'Davis', pets: null },
+            { ...testOwner, id: 1, firstName: 'George', lastName: 'Franklin', pets: null },
+            { ...testOwner, id: 2, firstName: 'Eduardo', lastName: 'Rodriquez', pets: null }
+        ];
+        const buscaPorTelefone = vi.spyOn(ownerService, 'searchOwnersByTelephone').mockReturnValue(of(doServidor));
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        component.searchByLastName('6085551023');
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(buscaPorTelefone).toHaveBeenCalledWith('6085551023');
+        const nomes = fixture.debugElement
+            .queryAll(By.css('.ownerFullName'))
+            .map(item => (item.nativeElement as HTMLElement).textContent);
+        expect(nomes).toEqual(['George Franklin', 'Eduardo Rodriquez', 'Betty Davis']);
+        expect(nomes.length).toBe(doServidor.length);
     });
 
 });

@@ -22,9 +22,16 @@
 
 import {Component, computed, inject, signal} from '@angular/core';
 import {rxResource} from '@angular/core/rxjs-interop';
+import {HttpErrorResponse} from '@angular/common/http';
 import {OwnerService} from '../owner.service';
 import {Owner} from '../owner';
 import {Router} from '@angular/router';
+
+// SPEC-002 secao 2.1: tira espacos e mascara (parenteses, hifen, ponto); so digitos = telefone
+function digitosDoTelefone(texto: string): string | null {
+  const semMascara = texto.replace(/[\s().-]/g, '');
+  return /^\d+$/.test(semMascara) ? semMascara : null;
+}
 
 @Component({
   selector: 'app-owner-list',
@@ -42,14 +49,46 @@ export class OwnerListComponent {
 
   private readonly ownersResource = rxResource({
     params: () => this.searchTerm(),
-    stream: ({params}) => params === ''
-      ? this.ownerService.getOwners()
-      : this.ownerService.searchOwners(params)
+    stream: ({params}) => {
+      if (params === '') {
+        return this.ownerService.getOwners();
+      }
+      const telefone = digitosDoTelefone(params);
+      return telefone !== null
+        ? this.ownerService.searchOwnersByTelephone(telefone)
+        : this.ownerService.searchOwners(params);
+    }
   });
 
   protected readonly owners = computed(() =>
     this.ownersResource.hasValue() ? this.ownersResource.value() : null);
   protected readonly isOwnersDataReceived = computed(() => !this.ownersResource.isLoading());
+
+  protected readonly isTelephoneSearch = computed(() =>
+    digitosDoTelefone(this.searchTerm()) !== null);
+
+  // telefone sem nenhum dono: lista vazia com aviso (SPEC-002 C4)
+  protected readonly noOwnerWithTelephone = computed(() => {
+    const lista = this.owners();
+    return this.isOwnersDataReceived() && this.isTelephoneSearch() && !!lista && lista.length === 0;
+  });
+
+  // 400 do servidor na busca por telefone: mostra a mensagem recebida junto ao campo (SPEC-002 C6)
+  protected readonly serverMessage = computed<string | null>(() => {
+    const erro: unknown = this.ownersResource.error();
+    if (!erro) {
+      return null;
+    }
+    const http = erro instanceof HttpErrorResponse
+      ? erro
+      : (erro as { cause?: unknown }).cause instanceof HttpErrorResponse
+        ? (erro as { cause: HttpErrorResponse }).cause
+        : null;
+    if (http === null || http.status !== 400) {
+      return null;
+    }
+    return http.error?.message ?? http.message;
+  });
 
   onSelect(owner: Owner) {
     this.router.navigate(['/owners', owner.id]);

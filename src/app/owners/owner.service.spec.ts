@@ -168,4 +168,25 @@ describe('OwnerService', () => {
         });
         req.flush('404 error', {status: 404, statusText: 'Not Found'});
     });
+
+    // @verifica: CT-118
+    it('RN-004 · busca por telefone com segurança ligada (OWNER_ADMIN) chama GET owners com o parâmetro telefone e entrega a lista do servidor', () => {
+        let received: Owner[] | undefined;
+
+        ownerService.searchOwnersByTelephone('6085551023').subscribe({
+            next: (owners) => (received = owners),
+            error: (error) => expect.fail(`Unexpected error: ${error}`),
+        });
+
+        const req = httpTestingController.expectOne(
+            (r) => r.urlWithParams === ownerService.entityUrl + '?telefone=6085551023'
+        );
+        expect(req.request.method).toEqual('GET');
+        // a tela envia só o telefone, nunca junto com o sobrenome
+        expect(req.request.urlWithParams).not.toContain('lastName');
+
+        // o servidor (papel OWNER_ADMIN, segurança ligada) responde 200 com a lista no formato de hoje
+        req.flush(expectedOwners);
+        expect(received).toEqual(expectedOwners);
+    });
 });
